@@ -1,0 +1,27 @@
+{
+  "name": "raksha",
+  "version": "1.0.0",
+  "description": "Raksha Citizen Safety & Emergency Response Platform - AI & Location Intelligence Engine",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test:ts": "npm run build && node --test --experimental-strip-types tests-ts/ai.test.ts tests-ts/location.test.ts tests-ts/escalation.test.ts",
+    "test:py": "python -m pytest tests/ -v",
+    "test": "npm run test:ts",
+    "test:all": "npm run test:ts && npm run test:py"
+  },
+  "keywords": [
+    "citizen-safety",
+    "ai-triage",
+    "location-intelligence",
+    "haversine",
+    "bengaluru"
+  ],
+  "author": "Raksha Team",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
