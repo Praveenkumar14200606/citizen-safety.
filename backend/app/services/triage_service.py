@@ -229,14 +229,20 @@ class AITriageService:
             )
 
     async def _dispatch_classification(self, text: str, language_hint: Optional[str]) -> TriageResult:
-        """Routes call to mock, Gemini, or OpenAI provider based on configuration."""
+        """Routes call to mock, Gemini, Groq, Ollama, or OpenAI provider based on configuration."""
+        if self.provider == "ollama":
+            # Ollama runs locally — no API key required
+            return await self._call_ollama_api(text, language_hint)
+
         if self.provider == "mock" or not self.api_key:
-            if not self.api_key and self.provider != "mock":
+            if not self.api_key and self.provider not in ("mock", "ollama"):
                 logger.warning("No LLM_API_KEY configured; falling back to local multilingual mock classifier.")
             return self._classify_mock(text, language_hint)
 
         if self.provider == "gemini":
             return await self._call_gemini_api(text, language_hint)
+        elif self.provider == "groq":
+            return await self._call_groq_api(text, language_hint)
         elif self.provider in ("openai", "custom"):
             return await self._call_openai_api(text, language_hint)
         else:
@@ -320,6 +326,118 @@ class AITriageService:
             return self._validate_and_build(parsed_json)
         except (KeyError, IndexError) as err:
             raise ValueError(f"Unexpected response structure from OpenAI API: {err}")
+
+    async def _call_groq_api(self, text: str, language_hint: Optional[str]) -> TriageResult:
+        """
+        Calls Groq Cloud API using the OpenAI-compatible /chat/completions endpoint.
+        Groq provides free, ultra-fast inference for open-source models:
+          - llama-3.1-8b-instant   (fastest, default)
+          - llama-3.3-70b-versatile (best quality)
+          - mixtral-8x7b-32768     (large context)
+          - gemma2-9b-it           (Google Gemma 2)
+
+        Get a free API key at: https://console.groq.com/keys
+        Set: LLM_PROVIDER=groq  LLM_API_KEY=gsk_...  LLM_MODEL=llama-3.1-8b-instant
+        """
+        model_name = self.model or "llama-3.1-8b-instant"
+        url = "https://api.groq.com/openai/v1/chat/completions"
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": TRIAGE_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Language hint: {language_hint or 'auto'}\n"
+                        f"Emergency Report:\n\"\"\"{text}\"\"\""
+                    )
+                }
+            ],
+            "temperature": 0.1,
+            "max_tokens": 300,
+            "response_format": {"type": "json_object"}   # Groq supports JSON mode
+        }
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code == 429:
+                raise RuntimeError("Groq API rate limit exceeded (HTTP 429). Retry after a moment.")
+            if resp.status_code == 401:
+                raise RuntimeError("Groq API key is invalid or missing. Check LLM_API_KEY.")
+            resp.raise_for_status()
+            data = resp.json()
+
+        try:
+            content_text = data["choices"][0]["message"]["content"]
+            parsed_json = self._parse_json_safely(content_text)
+            return self._validate_and_build(parsed_json)
+        except (KeyError, IndexError) as err:
+            raise ValueError(f"Unexpected response structure from Groq API: {err}")
+
+    async def _call_ollama_api(self, text: str, language_hint: Optional[str]) -> TriageResult:
+        """
+        Calls a locally running Ollama server (no API key required).
+        Ollama runs open-source models 100% on-device for free.
+
+        Install Ollama: https://ollama.com/download
+        Pull a model:  ollama pull llama3.2   (or mistral, phi3, gemma2, etc.)
+        Start server:  ollama serve            (runs on http://localhost:11434)
+
+        Set: LLM_PROVIDER=ollama  LLM_MODEL=llama3.2
+        Optionally set: LLM_BASE_URL=http://localhost:11434  (if non-default port)
+        """
+        base_url = (self.base_url or "http://localhost:11434").rstrip("/")
+        model_name = self.model or "llama3.2"
+        url = f"{base_url}/api/chat"
+
+        payload = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": TRIAGE_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Language hint: {language_hint or 'auto'}\n"
+                        f"Emergency Report:\n\"\"\"{text}\"\"\""
+                    )
+                }
+            ],
+            "stream": False,
+            "format": "json",   # Ollama native JSON mode
+            "options": {
+                "temperature": 0.1,
+                "num_predict": 300
+            }
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.post(url, json=payload)
+                if resp.status_code == 404:
+                    raise RuntimeError(
+                        f"Ollama model '{model_name}' not found. "
+                        f"Run: ollama pull {model_name}"
+                    )
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.ConnectError:
+            raise RuntimeError(
+                "Cannot connect to Ollama server at "
+                f"{base_url}. Is 'ollama serve' running?"
+            )
+
+        try:
+            content_text = data["message"]["content"]
+            parsed_json = self._parse_json_safely(content_text)
+            return self._validate_and_build(parsed_json)
+        except (KeyError, IndexError) as err:
+            raise ValueError(f"Unexpected response structure from Ollama API: {err}")
 
     def _parse_json_safely(self, text: str) -> Dict[str, Any]:
         """

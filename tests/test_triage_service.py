@@ -311,3 +311,263 @@ async def test_run_triage_in_background_callback():
     assert res.incident_type == IncidentType.FIRE
     assert "inc_bg_123" in saved_records
     assert saved_records["inc_bg_123"].incident_type == IncidentType.FIRE
+
+
+# ─────────────────────────────────────────────────────────────
+# Groq Provider Tests
+# ─────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_groq_provider_happy_path():
+    """Groq returns valid JSON → TriageResult produced correctly."""
+    groq_response = {
+        "choices": [{
+            "message": {
+                "content": (
+                    '{"incident_type":"FIRE","severity":5,"confidence":0.95,'
+                    '"possible_duplicate":false,"spam_flag":false,'
+                    '"reason":"Building fire reported","detected_language":"en"}'
+                )
+            }
+        }]
+    }
+    service = AITriageService(provider="groq", api_key="gsk_test_key", model="llama-3.1-8b-instant")
+
+    from unittest.mock import MagicMock
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = groq_response
+    mock_resp.raise_for_status = lambda: None
+
+    async def fake_post(*args, **kwargs):
+        return mock_resp
+
+    import httpx as _httpx
+    with patch.object(_httpx.AsyncClient, "post", new=fake_post):
+        result = await service.triage_incident(
+            TriageRequest(description="Building on fire, smoke everywhere")
+        )
+
+    assert result.incident_type == IncidentType.FIRE
+    assert result.severity == 5
+    assert result.confidence == 0.95
+    assert result.is_fallback is False
+
+
+@pytest.mark.asyncio
+async def test_groq_rate_limit_falls_back_safely():
+    """Groq HTTP 429 triggers safe fallback — SOS is never cancelled."""
+    service = AITriageService(provider="groq", api_key="gsk_test_key")
+
+    import httpx as _httpx
+    from unittest.mock import MagicMock
+    mock_resp = MagicMock()
+    mock_resp.status_code = 429
+    mock_resp.json.return_value = {}
+    mock_resp.raise_for_status = lambda: None
+
+    async def fake_post(*args, **kwargs):
+        return mock_resp
+
+    with patch.object(_httpx.AsyncClient, "post", new=fake_post):
+        result = await service.triage_incident(
+            TriageRequest(description="Help there is a fire!")
+        )
+
+    assert result.is_fallback is True
+    assert result.spam_flag is False
+    assert result.incident_type == IncidentType.OTHER
+
+
+@pytest.mark.asyncio
+async def test_groq_invalid_json_falls_back():
+    """Groq returns malformed JSON → fallback, never crash."""
+    groq_response = {
+        "choices": [{"message": {"content": "Sorry, I cannot classify this."}}]
+    }
+    service = AITriageService(provider="groq", api_key="gsk_test_key")
+    from unittest.mock import MagicMock
+    import httpx as _httpx
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = groq_response
+    mock_resp.raise_for_status = lambda: None
+
+    async def fake_post(*args, **kwargs):
+        return mock_resp
+
+    with patch.object(_httpx.AsyncClient, "post", new=fake_post):
+        result = await service.triage_incident(
+            TriageRequest(description="Some emergency description")
+        )
+
+    assert result.is_fallback is True
+    assert result.triage_error is not None
+
+
+@pytest.mark.asyncio
+async def test_groq_multilingual_hindi_payload():
+    """Groq provider receives the correct Hindi prompt — no pre-translation required."""
+    service = AITriageService(provider="groq", api_key="gsk_test_key", model="llama-3.1-8b-instant")
+    captured_payload: dict = {}
+
+    groq_response = {
+        "choices": [{
+            "message": {
+                "content": (
+                    '{"incident_type":"HARASSMENT","severity":3,"confidence":0.85,'
+                    '"possible_duplicate":false,"spam_flag":false,'
+                    '"reason":"Stalking reported in Hindi","detected_language":"hi"}'
+                )
+            }
+        }]
+    }
+
+    from unittest.mock import MagicMock
+    import httpx as _httpx
+
+    async def fake_post(*args, json=None, headers=None, **kwargs):
+        captured_payload.update(json or {})
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = groq_response
+        mock_resp.raise_for_status = lambda: None
+        return mock_resp
+
+    with patch.object(_httpx.AsyncClient, "post", new=fake_post):
+        result = await service.triage_incident(
+            TriageRequest(description="Koi mujhe peeche kar raha hai, help karo", language_hint="hi")
+        )
+
+    # Verify Hindi text is sent directly (no translation step)
+    user_msg = captured_payload["messages"][1]["content"]
+    assert "peeche kar raha" in user_msg
+    assert "language hint" in user_msg.lower()
+    assert result.incident_type == IncidentType.HARASSMENT
+    assert result.is_fallback is False
+
+
+# ─────────────────────────────────────────────────────────────
+# Ollama Provider Tests
+# ─────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_ollama_provider_happy_path():
+    """Ollama returns valid JSON → TriageResult produced without API key."""
+    ollama_response = {
+        "message": {
+            "content": (
+                '{"incident_type":"VIOLENCE","severity":4,"confidence":0.90,'
+                '"possible_duplicate":false,"spam_flag":false,'
+                '"reason":"Armed attack reported","detected_language":"en"}'
+            )
+        }
+    }
+    # Ollama needs NO api_key
+    service = AITriageService(
+        provider="ollama",
+        api_key=None,
+        model="llama3.2",
+        base_url="http://localhost:11434"
+    )
+    from unittest.mock import MagicMock
+    import httpx as _httpx
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = ollama_response
+    mock_resp.raise_for_status = lambda: None
+
+    async def fake_post(*args, **kwargs):
+        return mock_resp
+
+    with patch.object(_httpx.AsyncClient, "post", new=fake_post):
+        result = await service.triage_incident(
+            TriageRequest(description="Man with knife attacking people on MG Road")
+        )
+
+    assert result.incident_type == IncidentType.VIOLENCE
+    assert result.severity == 4
+    assert result.is_fallback is False
+
+
+@pytest.mark.asyncio
+async def test_ollama_server_offline_falls_back():
+    """Ollama server unreachable → ConnectError → safe fallback, never crash."""
+    import httpx as _httpx
+    service = AITriageService(provider="ollama", api_key=None, model="llama3.2")
+
+    with patch.object(
+        _httpx.AsyncClient, "post",
+        side_effect=_httpx.ConnectError("Connection refused")
+    ):
+        result = await service.triage_incident(
+            TriageRequest(description="Car crash near Silk Board")
+        )
+
+    assert result.is_fallback is True
+    assert "ollama" in result.triage_error.lower() or "connect" in result.triage_error.lower()
+    assert result.spam_flag is False
+    assert result.incident_type == IncidentType.OTHER
+
+
+@pytest.mark.asyncio
+async def test_ollama_model_not_found_falls_back():
+    """Ollama 404 (model not pulled) → fallback with helpful error."""
+    import httpx as _httpx
+    from unittest.mock import MagicMock
+
+    async def fake_post(*args, **kwargs):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        mock_resp.json.return_value = {"error": "model not found"}
+        mock_resp.raise_for_status = lambda: None
+        return mock_resp
+
+    service = AITriageService(provider="ollama", api_key=None, model="nonexistent-model")
+    with patch.object(_httpx.AsyncClient, "post", new=fake_post):
+        result = await service.triage_incident(
+            TriageRequest(description="Building fire on Residency Road")
+        )
+
+    assert result.is_fallback is True
+
+
+@pytest.mark.asyncio
+async def test_ollama_kannada_text_no_translation():
+    """Ollama receives raw Kannada — system confirms no pre-translation."""
+    ollama_response = {
+        "message": {
+            "content": (
+                '{"incident_type":"ACCIDENT","severity":4,"confidence":0.88,'
+                '"possible_duplicate":false,"spam_flag":false,'
+                '"reason":"Road accident with injuries","detected_language":"kn"}'
+            )
+        }
+    }
+    captured: dict = {}
+
+    from unittest.mock import MagicMock
+    import httpx as _httpx
+
+    async def fake_post(*args, json=None, **kwargs):
+        captured.update(json or {})
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = ollama_response
+        mock_resp.raise_for_status = lambda: None
+        return mock_resp
+
+    service = AITriageService(provider="ollama", api_key=None, model="llama3.2")
+    with patch.object(_httpx.AsyncClient, "post", new=fake_post):
+        result = await service.triage_incident(
+            TriageRequest(
+                description="ಅಪಘಾತವಾಗಿದೆ, ಒಬ್ಬರಿಗೆ ತೀವ್ರ ಗಾಯವಾಗಿದೆ",
+                language_hint="kn"
+            )
+        )
+
+    # Kannada text arrives untranslated in the request body
+    user_msg = captured["messages"][1]["content"]
+    assert "ಅಪಘಾತ" in user_msg
+    assert result.incident_type == IncidentType.ACCIDENT
+    assert result.is_fallback is False

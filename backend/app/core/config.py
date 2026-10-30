@@ -21,11 +21,12 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # AI Triage settings
-    LLM_PROVIDER: Literal["gemini", "openai", "custom", "mock"] = "mock"
+    # Providers: "gemini" | "openai" | "groq" | "ollama" | "custom" | "mock"
+    LLM_PROVIDER: Literal["gemini", "openai", "groq", "ollama", "custom", "mock"] = "mock"
     LLM_API_KEY: Optional[str] = None
-    LLM_MODEL: str = "gemini-2.5-flash"
-    LLM_BASE_URL: Optional[str] = None
-    LLM_TIMEOUT_SECONDS: float = 5.0  # Bounded timeout for AI triage
+    LLM_MODEL: str = "llama-3.1-8b-instant"   # default: Groq free-tier model
+    LLM_BASE_URL: Optional[str] = None         # Ollama: http://localhost:11434
+    LLM_TIMEOUT_SECONDS: float = 10.0          # Raised slightly for local Ollama cold starts
     LLM_MAX_RETRIES: int = 1
 
     # Location & Dispatch defaults (MVP Rules)
