@@ -1,0 +1,3 @@
+"""
+Raksha backend app package.
+"""
