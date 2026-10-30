@@ -103,3 +103,34 @@ def test_api_dispatch_evaluate(client):
     assert data["radius_state"]["current_radius_meters"] == 500
     assert data["radius_state"]["is_expanded"] is True
     assert "resp_01" in data["newly_notified_responder_ids"]
+
+
+def test_api_dispatch_rank(client):
+    now = datetime.now(timezone.utc)
+    payload = {
+        "latitude": 12.9767,
+        "longitude": 77.5713,
+        "max_radius_meters": 500.0,
+        "responders": [
+            {
+                "id": "resp_close",
+                "name": "Dr. Priya",
+                "latitude": 12.9775,
+                "longitude": 77.5713,
+                "is_available": True,
+                "is_active": True,
+                "is_verified": True,
+                "responder_type": "VERIFIED",
+                "trust_score": 4.8,
+                "last_location_update": now.isoformat()
+            }
+        ]
+    }
+    response = client.post("/ai-location/dispatch/rank", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["responder"]["id"] == "resp_close"
+    assert data[0]["radius_ring"] == 1
+    assert data[0]["is_within_radius"] is True
+    assert data[0]["composite_score"] > 1.0

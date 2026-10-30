@@ -183,5 +183,55 @@ def test_boundary_distance_ranking():
 
     assert ranked[0].responder.id == "r_0m"
     assert ranked[0].distance_meters < 1.0
+    assert ranked[0].radius_ring == 1
+    assert ranked[0].is_within_radius is True
+
     assert ranked[1].responder.id == "r_250m"
     assert 240.0 <= ranked[1].distance_meters <= 260.0
+    assert ranked[1].radius_ring == 1
+    assert ranked[1].is_within_radius is True
+
+
+def test_radius_ring_classification(sample_location):
+    """
+    Tests visual ring assignment:
+    - Ring 1 (<= 300m)
+    - Ring 2 (301m - 500m)
+    - Outside (0, > 500m)
+    """
+    ranker = DeterministicResponderRanker()
+    now = datetime.now(timezone.utc)
+    base_lat, base_lon = sample_location["latitude"], sample_location["longitude"]
+
+    r_ring1 = Responder(
+        id="r_r1", name="Ring 1", latitude=base_lat + 0.0015, longitude=base_lon,
+        is_available=True, is_active=True, last_location_update=now
+    )  # ~165m
+    r_ring2 = Responder(
+        id="r_r2", name="Ring 2", latitude=base_lat + 0.0035, longitude=base_lon,
+        is_available=True, is_active=True, last_location_update=now
+    )  # ~388m
+    r_outside = Responder(
+        id="r_out", name="Outside", latitude=base_lat + 0.0080, longitude=base_lon,
+        is_available=True, is_active=True, last_location_update=now
+    )  # ~888m
+
+    results = ranker.evaluate_and_rank(
+        incident_lat=base_lat,
+        incident_lon=base_lon,
+        responders=[r_ring1, r_ring2, r_outside],
+        max_radius_meters=300.0,
+        current_time=now
+    )
+
+    r1_res = next(r for r in results if r.responder.id == "r_r1")
+    assert r1_res.radius_ring == 1
+    assert r1_res.is_within_radius is True
+
+    r2_res = next(r for r in results if r.responder.id == "r_r2")
+    assert r2_res.radius_ring == 2
+    assert r2_res.is_within_radius is False  # Because max_radius_meters was 300.0
+
+    out_res = next(r for r in results if r.responder.id == "r_out")
+    assert out_res.radius_ring == 0
+    assert out_res.is_within_radius is False

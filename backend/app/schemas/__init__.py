@@ -14,6 +14,7 @@ from backend.app.schemas.dispatch import (
     Responder,
     RankedResponder,
     IncidentDispatchQuery,
+    RankRespondersRequest,
     RadiusExpansionState,
     DispatchDecision,
 )

@@ -241,3 +241,73 @@ async def test_spam_flag_and_sos_never_suppressed_policy():
     # and caller must treat it as advisory rather than suppressing the SOS.
     assert isinstance(result, TriageResult)
     assert result.medical_disclaimer is not None
+
+
+def test_conversational_json_extraction():
+    """
+    Ensures that LLM responses with conversational preambles or thoughts
+    are parsed cleanly without triggering false fallbacks.
+    """
+    service = AITriageService()
+    raw_llm_output = """
+    Here is the structured emergency assessment for the incident:
+    ```json
+    {
+        "incident_type": "ACCIDENT",
+        "severity": 4,
+        "confidence": 0.92,
+        "possible_duplicate": false,
+        "spam_flag": false,
+        "reason": "Collision between bus and car with injuries",
+        "detected_language": "en"
+    }
+    ```
+    Please dispatch assistance immediately.
+    """
+    parsed = service._parse_json_safely(raw_llm_output)
+    result = service._validate_and_build(parsed)
+
+    assert result.incident_type == IncidentType.ACCIDENT
+    assert result.severity == 4
+    assert result.confidence == 0.92
+    assert result.is_fallback is False
+
+
+@pytest.mark.asyncio
+async def test_transliterated_kanglish_and_hinglish():
+    """
+    Validates romanized Indian languages frequently typed on smartphone keyboards in Bengaluru.
+    """
+    service = AITriageService(provider="mock")
+
+    # Kanglish accident
+    res_kn = await service.triage_incident(TriageRequest(description="gaadi accident aagide rasteyalli"))
+    assert res_kn.incident_type == IncidentType.ACCIDENT
+    assert res_kn.severity >= 4
+
+    # Hinglish fire
+    res_hi = await service.triage_incident(TriageRequest(description="shop me aag lagi hai jal raha hai"))
+    assert res_hi.incident_type == IncidentType.FIRE
+    assert res_hi.severity == 5
+
+
+@pytest.mark.asyncio
+async def test_run_triage_in_background_callback():
+    """
+    Validates asynchronous background execution for Member 2 without blocking caller.
+    """
+    service = AITriageService(provider="mock")
+    saved_records = {}
+
+    async def mock_db_update(inc_id, triage_res):
+        saved_records[inc_id] = triage_res
+
+    res = await service.run_triage_in_background(
+        incident_id="inc_bg_123",
+        description="Massive building fire",
+        update_callback=mock_db_update
+    )
+
+    assert res.incident_type == IncidentType.FIRE
+    assert "inc_bg_123" in saved_records
+    assert saved_records["inc_bg_123"].incident_type == IncidentType.FIRE

@@ -10,6 +10,7 @@ from backend.app.schemas.triage import TriageRequest, TriageResult
 from backend.app.schemas.duplicate import DuplicateCheckRequest, DuplicateCheckResponse
 from backend.app.schemas.dispatch import (
     IncidentDispatchQuery,
+    RankRespondersRequest,
     DispatchDecision,
     RankedResponder,
     Responder
@@ -60,3 +61,21 @@ async def evaluate_dispatch_endpoint(payload: IncidentDispatchQuery) -> Dispatch
     Returns ranked eligible responders and newly notified responder IDs with deduplication.
     """
     return radius_expansion_service.evaluate_dispatch(payload)
+
+
+@ai_location_router.post(
+    "/dispatch/rank",
+    response_model=List[RankedResponder],
+    summary="Rank responders deterministically around given coordinates"
+)
+async def rank_responders_endpoint(payload: RankRespondersRequest) -> List[RankedResponder]:
+    """
+    Ranks responders deterministically for incident dispatch or map visualization.
+    Assigns radius rings (Ring 1: <=300m, Ring 2: 301-500m) and distinguishes verified responders.
+    """
+    return ranking_service.evaluate_and_rank(
+        incident_lat=payload.latitude,
+        incident_lon=payload.longitude,
+        responders=payload.responders,
+        max_radius_meters=payload.max_radius_meters
+    )

@@ -8,6 +8,7 @@ deterministic safe fallbacks during outages or parsing failures.
 import json
 import re
 import asyncio
+import inspect
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 import httpx
@@ -72,28 +73,28 @@ class MockLLMClassifier:
 
     KEYWORD_MAPPINGS = {
         IncidentType.FIRE: {
-            "kn": ["ಬೆಂಕಿ", "ಹೊಗೆ", "ಸುಡುತ್ತಿದೆ", "ಜ್ವಾಲೆ"],
-            "hi": ["आग", "धुआं", "धुआँ", "जल रहा", "लपटें"],
+            "kn": ["ಬೆಂಕಿ", "ಹೊಗೆ", "ಸುಡುತ್ತಿದೆ", "ಜ್ವಾಲೆ", "benki", "hoge", "suduttide"],
+            "hi": ["आग", "धुआं", "धुआँ", "जल रहा", "लपटें", "aag", "dhuan", "dhuwan", "jal raha"],
             "en": ["fire", "blaze", "smoke", "flames", "burning", "explosion"]
         },
         IncidentType.ACCIDENT: {
-            "kn": ["ಅಪಘಾತ", "ಡಿಕ್ಕಿ", "ರಕ್ತ", "ವಾಹನ ಪಲ್ಟಿ", "ಗುದ್ದಿದೆ"],
-            "hi": ["दुर्घटना", "एक्सीडेंट", "टक्कर", "खून", "गाड़ी पलट गई"],
+            "kn": ["ಅಪಘಾತ", "ಡಿಕ್ಕಿ", "ರಕ್ತ", "ವಾಹನ ಪಲ್ಟಿ", "ಗುದ್ದಿದೆ", "apaghatha", "accident", "dikkki", "palti"],
+            "hi": ["दुर्घटना", "एक्सीडेंट", "टक्कर", "खून", "गाड़ी पलट गई", "durghatna", "takkar", "khoon", "gaadi gir"],
             "en": ["accident", "crash", "collision", "hit and run", "run over", "bike fall"]
         },
         IncidentType.MEDICAL: {
-            "kn": ["ಹೃದಯಾಘಾತ", "ಉಸಿರಾಟ", "ಪ್ರಜ್ಞೆ ತಪ್ಪಿದೆ", "ಆಸ್ಪತ್ರೆ", "ನೋವು", "ಆಂಬ್ಯುಲೆನ್ಸ್"],
-            "hi": ["दिल का दौरा", "सांस", "बेहोश", "अस्पताल", "दर्द", "एम्बुलेंस", "हार्ट अटैक"],
+            "kn": ["ಹೃದಯಾಘಾತ", "ಉಸಿರಾಟ", "ಪ್ರಜ್ಞೆ ತಪ್ಪಿದೆ", "ಆಸ್ಪತ್ರೆ", "ನೋವು", "ಆಂಬ್ಯುಲೆನ್ಸ್", "hrudayaghatha", "ambulance", "usirata"],
+            "hi": ["दिल का दौरा", "सांस", "बेहोश", "अस्पताल", "दर्द", "एम्बुलेंस", "हार्ट अटैक", "behoshi", "saans", "aspatal"],
             "en": ["medical", "heart attack", "unconscious", "breathing", "ambulance", "bleeding", "stroke", "collapsed", "cpr"]
         },
         IncidentType.VIOLENCE: {
-            "kn": ["ಹಲ್ಲೆ", "ಹೊಡೆದಾಟ", "ಚಾಕು", "ಬಂದೂಕು", "ದರೋಡೆ", "ಕೊಲೆ"],
-            "hi": ["हमला", "मारपीट", "चाकू", "बंदूक", "डकैती", "लड़ाई", "खूनखराबा"],
+            "kn": ["ಹಲ್ಲೆ", "ಹೊಡೆದಾಟ", "ಚಾಕು", "ಬಂದೂಕು", "ದರೋಡೆ", "ಕೊಲೆ", "halle", "hodedata", "chaku", "kole"],
+            "hi": ["हमला", "मारपीट", "चाकू", "बंदूक", "डकैती", "लड़ाई", "खूनखराबा", "hamla", "marpeet", "ladai", "chaku"],
             "en": ["violence", "assault", "fight", "attack", "knife", "gun", "stabbing", "robbery", "weapon"]
         },
         IncidentType.HARASSMENT: {
-            "kn": ["ಕಿರುಕುಳ", "ಹಿಂಬಾಲಿಸುವುದು", "ಚುಡಾಯಿಸುವುದು", "ಬೆದರಿಕೆ"],
-            "hi": ["छेड़छाड़", "पीछा", "परेशान", "धमकी", "बदसलूकी"],
+            "kn": ["ಕಿರುಕುಳ", "ಹಿಂಬಾಲಿಸುವುದು", "ಚುಡಾಯಿಸುವುದು", "ಬೆದರಿಕೆ", "kirukula", "himbalisuvudu", "bedarike"],
+            "hi": ["छेड़छाड़", "पीछा", "परेशान", "धमकी", "बदसलूकी", "chhedchhad", "peecha", "pareshan", "dhamki"],
             "en": ["harassment", "stalking", "eve teasing", "following me", "molestation", "threat"]
         }
     }
@@ -129,7 +130,13 @@ class MockLLMClassifier:
         for inc_type, lang_dict in cls.KEYWORD_MAPPINGS.items():
             for lang, words in lang_dict.items():
                 for word in words:
-                    if word.lower() in text_lower:
+                    # Use whole-word boundary for ASCII words to prevent substring confusion (e.g. 'aag' in 'aagide')
+                    if word.isascii():
+                        is_match = bool(re.search(r'\b' + re.escape(word.lower()) + r'\b', text_lower))
+                    else:
+                        is_match = (word.lower() in text_lower)
+
+                    if is_match:
                         detected_lang = lang
                         severity = 4
                         if inc_type in (IncidentType.MEDICAL, IncidentType.FIRE):
@@ -315,13 +322,57 @@ class AITriageService:
             raise ValueError(f"Unexpected response structure from OpenAI API: {err}")
 
     def _parse_json_safely(self, text: str) -> Dict[str, Any]:
-        """Strips markdown fences and parses raw JSON string."""
+        """
+        Strips markdown fences and extracts raw JSON object.
+        Robust against LLM conversational preamble or thought markers.
+        """
         cleaned = text.strip()
-        # Remove ```json or ``` fences if present
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-            cleaned = re.sub(r"\s*```$", "", cleaned)
+        # 1. Try stripping markdown code fences
+        if "```" in cleaned:
+            # Extract content between markdown fences if present
+            fence_match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", cleaned, re.DOTALL)
+            if fence_match:
+                return json.loads(fence_match.group(1).strip())
+
+        # 2. Try extracting the first valid JSON object block {...}
+        json_obj_match = re.search(r"(\{[\s\S]*\})", cleaned, re.DOTALL)
+        if json_obj_match:
+            try:
+                return json.loads(json_obj_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # 3. Direct parse fallback
         return json.loads(cleaned)
+
+    async def run_triage_in_background(
+        self,
+        incident_id: str,
+        description: str,
+        update_callback=None,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None
+    ) -> TriageResult:
+        """
+        Convenience runner for Member 2 to execute triage asynchronously
+        without blocking SOS creation or initial responder dispatch.
+        """
+        request = TriageRequest(
+            incident_id=incident_id,
+            description=description,
+            latitude=latitude,
+            longitude=longitude
+        )
+        result = await self.triage_incident(request)
+        if update_callback and callable(update_callback):
+            try:
+                if inspect.iscoroutinefunction(update_callback):
+                    await update_callback(incident_id, result)
+                else:
+                    update_callback(incident_id, result)
+            except Exception as cb_err:
+                logger.error(f"Callback failed in run_triage_in_background: {cb_err}")
+        return result
 
     def _validate_and_build(self, raw_data: Dict[str, Any]) -> TriageResult:
         """

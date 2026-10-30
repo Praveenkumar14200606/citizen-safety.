@@ -216,3 +216,55 @@ def test_non_destructive_contract():
     assert record.id == "inc_preserve"
     # Verify advisory warning is returned to operator
     assert "NOT be auto-merged" in response.advisory_notice
+
+
+def test_duck_typed_and_dictionary_records_support():
+    """
+    Ensures that Member 2 can pass raw dicts or mock SQLAlchemy objects
+    without manual model conversions.
+    """
+    detector = CandidateDuplicateDetector(distance_threshold_meters=200.0)
+    now = datetime.now(timezone.utc)
+
+    # Pass as raw dictionary (e.g. from raw SQL or document store)
+    raw_dict_record = {
+        "id": "inc_dict_1",
+        "incident_type": "FIRE",
+        "description": "Small electrical fire in apartment",
+        "latitude": 12.9716,
+        "longitude": 77.5946,
+        "created_at": now - timedelta(minutes=2)
+    }
+
+    # Pass as custom object with attributes (e.g. SQLAlchemy ORM model)
+    class MockORMIncident:
+        def __init__(self, id, incident_type, description, latitude, longitude, created_at):
+            self.id = id
+            self.incident_type = incident_type
+            self.description = description
+            self.latitude = latitude
+            self.longitude = longitude
+            self.created_at = created_at
+
+    orm_record = MockORMIncident(
+        id="inc_orm_2",
+        incident_type="FIRE",
+        description="Electrical fire in apartment complex",
+        latitude=12.9718,
+        longitude=77.5946,
+        created_at=now - timedelta(minutes=3)
+    )
+
+    request = DuplicateCheckRequest(
+        incident_id="inc_target",
+        incident_type=IncidentType.FIRE,
+        description="Apartment electrical blaze",
+        latitude=12.9717,
+        longitude=77.5946,
+        created_at=now,
+        recent_incidents=[raw_dict_record, orm_record]  # Mixed duck-typed list
+    )
+
+    response = detector.evaluate_candidates(request)
+    assert response.is_possible_duplicate is True
+    assert set(response.possible_duplicate_ids) == {"inc_dict_1", "inc_orm_2"}

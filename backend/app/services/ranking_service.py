@@ -120,6 +120,16 @@ class DeterministicResponderRanker:
                 eta_seconds = None
                 eta_source = "UNESTIMATED"
 
+            # Ring classification (Ring 1: <= 300m, Ring 2: 301-500m, 0: > 500m)
+            if dist <= 300.0:
+                radius_ring = 1
+            elif dist <= 500.0:
+                radius_ring = 2
+            else:
+                radius_ring = 0
+
+            is_within_radius = (dist <= max_radius_meters)
+
             evaluated.append(RankedResponder(
                 responder=r,
                 distance_meters=dist,
@@ -128,7 +138,9 @@ class DeterministicResponderRanker:
                 ineligibility_reason=ineligibility_reason,
                 composite_score=composite_score,
                 eta_seconds=eta_seconds,
-                eta_source=eta_source
+                eta_source=eta_source,
+                is_within_radius=is_within_radius,
+                radius_ring=radius_ring
             ))
 
         # Deterministic sorting:

@@ -81,6 +81,14 @@ class RankedResponder(BaseModel):
         default=None,
         description="'OSRM_ROUTING', 'VERIFIED_TELEMETRY', or 'UNESTIMATED'"
     )
+    is_within_radius: bool = Field(
+        default=True,
+        description="True if responder distance is within evaluated search radius"
+    )
+    radius_ring: int = Field(
+        default=1,
+        description="1 for Ring 1 (<= 300m), 2 for Ring 2 (301m - 500m), 0 for outside search radius"
+    )
 
 
 class IncidentDispatchQuery(BaseModel):
@@ -93,6 +101,14 @@ class IncidentDispatchQuery(BaseModel):
     status: str = Field(default="RAISED")
     responders: List[Responder] = Field(default_factory=list)
     already_notified_responder_ids: List[str] = Field(default_factory=list)
+
+
+class RankRespondersRequest(BaseModel):
+    """Direct query to rank responders around a given coordinate."""
+    latitude: float = Field(..., ge=-90.0, le=90.0)
+    longitude: float = Field(..., ge=-180.0, le=180.0)
+    responders: List[Responder] = Field(default_factory=list)
+    max_radius_meters: float = Field(default=500.0, ge=1.0)
 
 
 class RadiusExpansionState(BaseModel):

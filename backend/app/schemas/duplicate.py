@@ -3,14 +3,16 @@ Pydantic Schemas for Candidate Duplicate Detection.
 Preserves original incident records without destructive auto-merging.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Any, Union
 from datetime import datetime, timezone
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from backend.app.schemas.triage import IncidentType
 
 
 class ExistingIncidentRecord(BaseModel):
     """Snapshot of an active or recent incident used for candidate comparison."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     incident_type: IncidentType
     description: Optional[str] = None
@@ -33,15 +35,17 @@ class CandidateDuplicateMatch(BaseModel):
 
 class DuplicateCheckRequest(BaseModel):
     """Query payload to check if a new/incoming incident is a duplicate of existing ones."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     incident_id: Optional[str] = None
     incident_type: IncidentType
     description: Optional[str] = None
     latitude: float = Field(..., ge=-90.0, le=90.0)
     longitude: float = Field(..., ge=-180.0, le=180.0)
     created_at: Optional[datetime] = None
-    recent_incidents: List[ExistingIncidentRecord] = Field(
+    recent_incidents: List[Any] = Field(
         default_factory=list,
-        description="List of active or recent incidents provided by the backend store"
+        description="List of active or recent incidents (records, ORM models, or dicts)"
     )
 
 
