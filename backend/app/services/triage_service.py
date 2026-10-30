@@ -230,6 +230,10 @@ class AITriageService:
 
     async def _dispatch_classification(self, text: str, language_hint: Optional[str]) -> TriageResult:
         """Routes call to mock, Gemini, Groq, Ollama, or OpenAI provider based on configuration."""
+        if self.provider == "distilbert":
+            # Locally trained Multilingual DistilBERT (no API key, offline)
+            return self._classify_distilbert(text, language_hint)
+
         if self.provider == "ollama":
             # Ollama runs locally — no API key required
             return await self._call_ollama_api(text, language_hint)
@@ -247,6 +251,62 @@ class AITriageService:
             return await self._call_openai_api(text, language_hint)
         else:
             return self._classify_mock(text, language_hint)
+
+
+    def _classify_distilbert(self, text: str, language_hint: Optional[str]) -> TriageResult:
+        """
+        Runs local inference using fine-tuned Multilingual DistilBERT.
+        Zero API keys required, runs 100% offline on CPU.
+        """
+        import os
+        import torch
+        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+        model_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models", "raksha_emergency_distilbert"))
+        if not os.path.exists(model_dir):
+            logger.warning(f"DistilBERT model directory not found at {model_dir}. Falling back to mock.")
+            return self._classify_mock(text, language_hint)
+
+        if not hasattr(self, "_distilbert_model") or self._distilbert_model is None:
+            self._distilbert_tokenizer = AutoTokenizer.from_pretrained(model_dir)
+            self._distilbert_model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+            self._distilbert_model.eval()
+
+        inputs = self._distilbert_tokenizer(text, return_tensors="pt", truncation=True, max_length=128)
+        with torch.no_grad():
+            logits = self._distilbert_model(**inputs).logits
+            probs = torch.softmax(logits, dim=1)
+            pred_id = torch.argmax(probs, dim=1).item()
+            confidence = round(float(probs[0][pred_id].item()), 2)
+
+        pred_label = self._distilbert_model.config.id2label.get(pred_id, "OTHER")
+        
+        # Severity estimation heuristic based on emergency type
+        severity_map = {
+            "FIRE": 5,
+            "MEDICAL": 5,
+            "VIOLENCE": 5,
+            "ACCIDENT": 4,
+            "HARASSMENT": 3,
+            "OTHER": 2
+        }
+        severity = severity_map.get(pred_label, 3)
+
+        detected_lang = language_hint or "en"
+        if any('\u0C80' <= c <= '\u0CFF' for c in text):
+            detected_lang = "kn"
+        elif any('\u0900' <= c <= '\u097F' for c in text):
+            detected_lang = "hi"
+
+        return self._validate_and_build({
+            "incident_type": pred_label,
+            "severity": severity,
+            "confidence": confidence,
+            "possible_duplicate": False,
+            "spam_flag": False,
+            "reason": f"Classified by local fine-tuned Multilingual DistilBERT ({confidence*100:.0f}% confidence)",
+            "detected_language": detected_lang
+        })
 
     def _classify_mock(self, text: str, language_hint: Optional[str]) -> TriageResult:
         """Runs fast in-memory classifier."""

@@ -571,3 +571,24 @@ async def test_ollama_kannada_text_no_translation():
     assert "ಅಪಘಾತ" in user_msg
     assert result.incident_type == IncidentType.ACCIDENT
     assert result.is_fallback is False
+
+
+# ─────────────────────────────────────────────────────────────
+# Local Fine-Tuned DistilBERT Model Tests
+# ─────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_local_distilbert_inference():
+    """Validates offline inference using the locally trained DistilBERT Transformer."""
+    service = AITriageService(provider="distilbert")
+    req = TriageRequest(description="Someone is following me, I feel unsafe", language_hint="en")
+    result = await service.triage_incident(req)
+
+    assert result.is_fallback is False
+    assert result.incident_type in (
+        IncidentType.HARASSMENT, IncidentType.VIOLENCE, IncidentType.OTHER,
+        IncidentType.MEDICAL, IncidentType.ACCIDENT, IncidentType.FIRE
+    )
+    assert 1 <= result.severity <= 5
+    assert 0.0 <= result.confidence <= 1.0
+    assert "DistilBERT" in result.reason

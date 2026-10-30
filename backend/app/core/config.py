@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # AI Triage settings
     # Providers: "gemini" | "openai" | "groq" | "ollama" | "custom" | "mock"
-    LLM_PROVIDER: Literal["gemini", "openai", "groq", "ollama", "custom", "mock"] = "mock"
+    LLM_PROVIDER: Literal["gemini", "openai", "groq", "ollama", "distilbert", "custom", "mock"] = "mock"
     LLM_API_KEY: Optional[str] = None
     LLM_MODEL: str = "llama-3.1-8b-instant"   # default: Groq free-tier model
     LLM_BASE_URL: Optional[str] = None         # Ollama: http://localhost:11434

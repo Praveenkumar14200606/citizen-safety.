@@ -42,3 +42,9 @@ yarn-error.log*
 .vscode/
 .idea/
 *.swp
+
+
+# Large ML Model Weights (keep code & scripts in Git, train or load weights locally)
+*.safetensors
+*.bin
+backend/models/

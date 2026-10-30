@@ -1,0 +1,205 @@
+"""
+Generates the labeled multilingual dataset for training Raksha's Emergency Classifier.
+Includes: English, Hindi, Kannada, Hinglish, and Kanglish emergency reports.
+Labels: incident_type (FIRE, MEDICAL, HARASSMENT, VIOLENCE, ACCIDENT, OTHER)
+        severity (1-5)
+"""
+
+import json
+
+RAW_DATA = [
+    # ─── FIRE (Severity 4-5) ───
+    # English
+    {"text": "Building is on fire, smoke everywhere, people are trapped inside", "incident_type": "FIRE", "severity": 5},
+    {"text": "My house caught fire, flames spreading to next building", "incident_type": "FIRE", "severity": 5},
+    {"text": "There is a massive fire on MG Road, multiple cars burning", "incident_type": "FIRE", "severity": 5},
+    {"text": "Factory fire near Peenya, black smoke visible from far", "incident_type": "FIRE", "severity": 5},
+    {"text": "Fire broke out in the kitchen, cannot control it", "incident_type": "FIRE", "severity": 4},
+    {"text": "Electrical fire in office building third floor", "incident_type": "FIRE", "severity": 4},
+    {"text": "Gas cylinder exploded, fire spreading fast in apartment", "incident_type": "FIRE", "severity": 5},
+    {"text": "Bus caught fire on highway, passengers evacuating", "incident_type": "FIRE", "severity": 5},
+    {"text": "Transformer explosion caused huge blaze in commercial street", "incident_type": "FIRE", "severity": 5},
+    {"text": "Huge smoke coming out of petrol bunk, flames visible", "incident_type": "FIRE", "severity": 5},
+    # Hindi / Hinglish
+    {"text": "Meri building mein aag lagi hai, log phanse hain andar", "incident_type": "FIRE", "severity": 5},
+    {"text": "Ghar mein aag lag gayi, alpayi control nahi ho rahi", "incident_type": "FIRE", "severity": 5},
+    {"text": "Dukan mein aag lagi, dhuan bahut zyada hai", "incident_type": "FIRE", "severity": 4},
+    {"text": "Bijli ke wajah se aag lagi, ek kamra jal raha hai", "incident_type": "FIRE", "severity": 4},
+    {"text": "Rasoi mein aag lagi, cylinder blast hua", "incident_type": "FIRE", "severity": 5},
+    {"text": "Sadak pe gaadi jal rahi hai, log nikal rahe hain", "incident_type": "FIRE", "severity": 5},
+    {"text": "Kaafi badi aag lag gayi factory mein, madad chahiye", "incident_type": "FIRE", "severity": 5},
+    {"text": "आग लग गई है, मकान में धुआं ही धुआं है", "incident_type": "FIRE", "severity": 5},
+    {"text": "सिलेंडर फटा और भीषण आग लगी, तुरंत फायर ब्रिगेड भेजो", "incident_type": "FIRE", "severity": 5},
+    {"text": "दुकान में शॉर्ट सर्किट से भयानक आग लगी है", "incident_type": "FIRE", "severity": 4},
+    # Kannada / Kanglish
+    {"text": "Kattadalli benki hattide, janaru sigididdare", "incident_type": "FIRE", "severity": 5},
+    {"text": "Mane benki hattide, hoge tumba ide", "incident_type": "FIRE", "severity": 5},
+    {"text": "ಬೆಂಕಿ ಹತ್ತಿದೆ, ಮನೆ ಸುಡುತ್ತಿದೆ, ಸಹಾಯ ಬೇಕು", "incident_type": "FIRE", "severity": 5},
+    {"text": "ಕಾರ್ಖಾನೆಯಲ್ಲಿ ಬೆಂಕಿ ತೀವ್ರವಾಗಿದೆ, ಕಾರ್ಮಿಕರು ಸಿಕ್ಕಿಬಿದ್ದಿದ್ದಾರೆ", "incident_type": "FIRE", "severity": 5},
+    {"text": "ಅಡಿಗೆಮನೆಯಲ್ಲಿ ಬೆಂಕಿ ಶುರುವಾಗಿದೆ, ಆರಿಸಲು ಆಗುತ್ತಿಲ್ಲ", "incident_type": "FIRE", "severity": 4},
+    {"text": "ರಸ್ತೆಯ ಮೇಲೆ ಬಸ್ ಉರಿಯುತ್ತಿದೆ, ಜನ ಹೊರಬರುತ್ತಿದ್ದಾರೆ", "incident_type": "FIRE", "severity": 5},
+    {"text": "ಅಂಗಡಿಯಲ್ಲಿ ಬೆಂಕಿ, ಸಿಲಿಂಡರ್ ಸ್ಫೋಟ ಆಗಿದೆ", "incident_type": "FIRE", "severity": 5},
+    {"text": "ಕಟ್ಟಡದ ಮೇಲಿನ ಮಹಡಿಗೆ ಬೆಂಕಿ ಹಿಡಿದಿದೆ", "incident_type": "FIRE", "severity": 4},
+    {"text": "Benki tumba doda aagirutte, dadiyalli hoguttide", "incident_type": "FIRE", "severity": 5},
+    {"text": "ಇಲ್ಲಿ ಭಾರೀ ಅಗ್ನಿ ಅವಘಡ ಸಂಭವಿಸಿದೆ ತಕ್ಷಣ ಅಗ್ನಿಶಾಮಕ ವಾಹನ ಕಳುಹಿಸಿ", "incident_type": "FIRE", "severity": 5},
+
+    # ─── MEDICAL (Severity 4-5) ───
+    # English
+    {"text": "Person collapsed on street, not breathing, need ambulance now", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Heart attack, man unconscious on footpath near bus stop", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Pregnant woman in severe labour pain, cannot reach hospital", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Child having seizures, parents panicking, need emergency medical help", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Old man fell from stairs, heavy bleeding from head", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Person is having difficulty breathing, chest tightness and choking", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Someone fainted in the market, pulse is very weak", "incident_type": "MEDICAL", "severity": 4},
+    {"text": "My father is having intense chest pain, sweating profusely", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Snake bite victim, arm swelling rapidly, unconscious", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Severe allergic reaction, throat closing, cannot breathe", "incident_type": "MEDICAL", "severity": 5},
+    # Hindi / Hinglish
+    {"text": "Mera baap behosh ho gaya, saans nahi le raha, ambulance chahiye", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Heart attack aa gaya uncle ko, abhi hospital le jaana hai", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Bacche ko dora pad raha hai, ambulance bhej do", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Budhiya gir gayi, sir se khoon aa raha hai bahut zyada", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Pregnant aurat ko bahut dard ho raha hai, hospital door hai", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Koi saans nahi le pa raha, hont neele ho rahe hain", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Kisi ko saanp ne kata, haath sool raha hai", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Seene mein tez dard hai, chakkar aa rahe hain", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "व्यक्ति बेहोश होकर गिर पड़ा, सांस नहीं चल रही", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "दिल का दौरा पड़ा है, तुरंत एम्बुलेंस की आवश्यकता है", "incident_type": "MEDICAL", "severity": 5},
+    # Kannada / Kanglish
+    {"text": "ಒಬ್ಬ ವ್ಯಕ್ತಿ ರಸ್ತೆಯಲ್ಲಿ ಬಿದ್ದಿದ್ದಾರೆ, ಉಸಿರಾಟ ನಿಂತಿದೆ, ಆಂಬ್ಯುಲೆನ್ಸ್ ಕಳಿಸಿ", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "ಹೃದಯಾಘಾತ ಆಗಿದೆ, ತಕ್ಷಣ ಸಹಾಯ ಬೇಕು", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "ಮಗುವಿಗೆ ಜ್ವರ ತೀವ್ರವಾಗಿದೆ, ಪ್ರಜ್ಞೆ ತಪ್ಪುತ್ತಿದೆ", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "ಮುದುಕಿ ಬಿದ್ದರು, ತಲೆಯಿಂದ ರಕ್ತ ಬರುತ್ತಿದೆ", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "ಗರ್ಭಿಣಿಗೆ ನೋವು ಶುರುವಾಗಿದೆ, ಆಸ್ಪತ್ರೆ ತಲುಪಲು ಆಗುತ್ತಿಲ್ಲ", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Ushiratu nilla, ambulance barali bega", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "ಹಾವು ಕಚ್ಚಿದೆ, ಕೈ ಊದಿಕೊಳ್ಳುತ್ತಿದೆ", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "ಎದೆ ನೋವು ತೀವ್ರವಾಗಿದೆ, ಮೂರ್ಛೆ ಬೀಳುತ್ತಿದ್ದಾರೆ", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "ಪ್ರಜ್ಞಾಹೀನರಾಗಿದ್ದಾರೆ, ನಾಡಿ ಬಡಿತ ಸಿಗುತ್ತಿಲ್ಲ", "incident_type": "MEDICAL", "severity": 5},
+    {"text": "Hrudayaghatha aagide, doctor beku", "incident_type": "MEDICAL", "severity": 5},
+
+    # ─── HARASSMENT (Severity 2-4) ───
+    # English
+    {"text": "Someone is following me since 20 minutes, I am terrified", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Men are eve-teasing and passing vulgar comments near metro station", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Being stalked by a stranger walking home, please send help", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Group of boys harassing women and blocking the walkway", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Someone is threatening me repeatedly over messages and calls", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Ex-partner is following me everywhere, feels very unsafe", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Auto driver refusing to let woman leave, demanding extra money aggressively", "incident_type": "HARASSMENT", "severity": 4},
+    {"text": "Man taking inappropriate pictures without consent at bus stop", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Persistent stalking outside college hostel gate", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Verbal harassment and intimidatory gestures on dark alley", "incident_type": "HARASSMENT", "severity": 3},
+    # Hindi / Hinglish
+    {"text": "Koi mujhe peeche kar raha hai kaafi der se, darr lag raha hai", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Ladke chhed rhe hain bus stop par, help chahiye", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Mujhe ek ajnabi follow kar raha hai, please madad karo", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Koi baar baar phone karke dhamki de raha hai", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Auto wala pareshan kar raha hai, utarne nahi de raha", "incident_type": "HARASSMENT", "severity": 4},
+    {"text": "Bina ijazat ke meri photo kheench raha hai ek aadmi", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "लड़के पीछा कर रहे हैं और छेड़छाड़ कर रहे हैं", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "कोई अजनबी काफी देर से मेरा पीछा कर रहा है", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "बस स्टैंड पर कुछ मनचले परेशान कर रहे हैं", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Peecha kar rahe hain do log bike par", "incident_type": "HARASSMENT", "severity": 3},
+    # Kannada / Kanglish
+    {"text": "ಯಾರೋ ನನ್ನನ್ನು ಹಿಂಬಾಲಿಸುತ್ತಿದ್ದಾರೆ, ನನಗೆ ಭಯ ಆಗುತ್ತಿದೆ", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "ಹುಡುಗರು ನನ್ನನ್ನು ಬಸ್ ನಿಲ್ದಾಣದಲ್ಲಿ ಕಿರುಕುಳ ಕೊಡುತ್ತಿದ್ದಾರೆ", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "ಯಾರೋ ಅಪರಿಚಿತ ನನ್ನನ್ನು ಹಿಂಬಾಲಿಸುತ್ತಿದ್ದಾರೆ, ಸಹಾಯ ಮಾಡಿ", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "ನೆರೆಯವರು ಬೆದರಿಕೆ ಹಾಕುತ್ತಿದ್ದಾರೆ, ಅಸುರಕ್ಷಿತ ಭಾವ", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "ಆಟೋ ಚಾಲಕ ಮಹಿಳೆಗೆ ಕಿರುಕುಳ ನೀಡುತ್ತಿದ್ದಾನೆ", "incident_type": "HARASSMENT", "severity": 4},
+    {"text": "Yaro nanna hindininda bartiddare, tumba bayavagide", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "ಹೆಣ್ಣು ಮಕ್ಕಳಿಗೆ ರಸ್ತೆಯಲ್ಲಿ ಕಿರುಕುಳ ನೀಡುತ್ತಿದ್ದಾರೆ", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "ಫೋಟೋ ತೆಗೆಯುತ್ತಿದ್ದಾರೆ ಅನುಮತಿ ಇಲ್ಲದೆ", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "Bedarike haaktiddare, rakshane beku", "incident_type": "HARASSMENT", "severity": 3},
+    {"text": "ಕಾಲ್ ಮಾಡಿ ಅಶ್ಲೀಲವಾಗಿ ಮಾತನಾಡುತ್ತಿದ್ದಾರೆ", "incident_type": "HARASSMENT", "severity": 2},
+
+    # ─── VIOLENCE (Severity 4-5) ───
+    # English
+    {"text": "Man attacking people with a knife near Majestic bus stand", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Gang fight, weapons and machetes involved, heavy bleeding", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Armed robbery at the ATM, thief threatening with gun", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Man beating wife severely inside apartment, screams heard", "incident_type": "VIOLENCE", "severity": 4},
+    {"text": "Group of men violently thrashing a lone shopkeeper", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Gunshots heard in residential area, people screaming and fleeing", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Person stabbed in chest, lying in pool of blood", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Road rage escalated to brutal assault with iron rods", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Violent mob destroying property and attacking passersby", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Physical assault happening right now in parking lot", "incident_type": "VIOLENCE", "severity": 4},
+    # Hindi / Hinglish
+    {"text": "Koi chaku lekar hamla kar raha hai sadak par", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Do gangs ki ladai ho rahi hai, hathiyar hain, khoon aa raha", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "ATM par loot ho rahi hai, badmash ke paas pistol hai", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Ek aadmi ko chaku maara gaya hai, zameen par pada hai", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "चाकू मारकर लूट की कोशिश हो रही है, जल्दी पुलिस भेजो", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "हथियारों के साथ मारपीट हो रही है, खून बह रहा है", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "गोली चलने की आवाज आई, लोग दहशत में भाग रहे हैं", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Bheed ne ek aadmi ko pakad kar peet dala hai", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Lohe ke pipe se sar par hamla kiya hai", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Buri tarah maarpeet chal rahi hai bazaar mein", "incident_type": "VIOLENCE", "severity": 4},
+    # Kannada / Kanglish
+    {"text": "ಚಾಕು ಹಿಡಿದ ವ್ಯಕ್ತಿ ಜನರ ಮೇಲೆ ದಾಳಿ ಮಾಡುತ್ತಿದ್ದಾನೆ", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "ಎರಡು ಗ್ಯಾಂಗ್ ನಡುವೆ ಹೊಡೆದಾಟ, ಶಸ್ತ್ರಾಸ್ತ್ರ ಬಳಕೆ ಆಗುತ್ತಿದೆ", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "ATM ಬಳಿ ದರೋಡೆ ಆಗುತ್ತಿದೆ, ಬಂದೂಕು ತೋರಿಸುತ್ತಿದ್ದಾರೆ", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "ಒಬ್ಬರಿಗೆ ಚಾಕು ತಿವಿದಿದ್ದಾರೆ, ತುಂಬ ರಕ್ತ ಬರುತ್ತಿದೆ", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "ಗುಂಡಿನ ಸದ್ದು ಕೇಳಿಸಿತು, ಜನರು ಓಡಿಹೋಗುತ್ತಿದ್ದಾರೆ", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "ಕಬ್ಬಿಣದ ರಾಡ್ ನಿಂದ ಹೊಡೆಯುತ್ತಿದ್ದಾರೆ, ರಕ್ತ ಸುರಿಯುತ್ತಿದೆ", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Hodedata aagide, chaku bisi madiddare", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "Gumpu katti obbarannu hoditiddare", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "ಮಾರಕಾಸ್ತ್ರಗಳಿಂದ ಹಲ್ಲೆ ಮಾಡಲಾಗಿದೆ", "incident_type": "VIOLENCE", "severity": 5},
+    {"text": "ರೌಡಿಗಳು ಅಂಗಡಿ ಒಡೆದು ವ್ಯಾಪಾರಸ್ಥನ ಮೇಲೆ ಹಲ್ಲೆ ನಡೆಸಿದ್ದಾರೆ", "incident_type": "VIOLENCE", "severity": 5},
+
+    # ─── ACCIDENT (Severity 4-5) ───
+    # English
+    {"text": "Serious road accident near Silk Board junction, two cars collided", "incident_type": "ACCIDENT", "severity": 4},
+    {"text": "Motorcyclist hit by speeding truck, lying on road injured and bleeding", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "Car overturned on highway, people trapped inside the vehicle", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "Construction worker fell from 4th floor, critical head injury", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "Child run over by auto, need immediate ambulance", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "Head-on collision between bus and lorry, multiple casualties", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "Hit and run accident, pedestrian struck by SUV and thrown into drain", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "Scooter slipped on oil spill, rider broke limb cannot stand", "incident_type": "ACCIDENT", "severity": 4},
+    {"text": "Auto overturned due to pothole, passengers crying for help", "incident_type": "ACCIDENT", "severity": 4},
+    {"text": "Major traffic pileup on flyover, multiple smashed cars", "incident_type": "ACCIDENT", "severity": 4},
+    # Hindi / Hinglish
+    {"text": "Sadak durghatna Silk Board ke paas, do gadiyan takrayi", "incident_type": "ACCIDENT", "severity": 4},
+    {"text": "Biker ko truck ne mara, sadak par pada hai, khoon beh raha", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "Gaadi highway par palat gayi, log andar phanse hain", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "Aadmi building se gira, behosh hai zameen par", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "Bus aur truck ki aamne saamne takkar hui hai", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "भयानक सड़क दुर्घटना, कार ट्रक के नीचे आ गई", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "बाइक सवार को तेज रफ्तार गाड़ी ने टक्कर मार दी", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "गाड़ी पलट गई है और लोग अंदर फंसे हुए हैं", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "Hit and run, ghayil insaan sadak par, gaadi bhaag gayi", "incident_type": "ACCIDENT", "severity": 4},
+    {"text": "Bridge par bada accident hua hai, ambulance bhejo", "incident_type": "ACCIDENT", "severity": 5},
+    # Kannada / Kanglish
+    {"text": "ತೀವ್ರ ರಸ್ತೆ ಅಪಘಾತ, ಎರಡು ವಾಹನಗಳು ಡಿಕ್ಕಿ ಹೊಡೆದಿವೆ", "incident_type": "ACCIDENT", "severity": 4},
+    {"text": "ಮೋಟಾರ್‌ಸೈಕಲ್ ಸವಾರನಿಗೆ ಟ್ರಕ್ ಡಿಕ್ಕಿ, ರಸ್ತೆಯಲ್ಲಿ ಬಿದ್ದಿದ್ದಾರೆ", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "ರಾಷ್ಟ್ರೀಯ ಹೆದ್ದಾರಿಯಲ್ಲಿ ಕಾರು ಉರುಳಿಕೊಂಡಿದೆ, ಒಳಗೆ ಜನರಿದ್ದಾರೆ", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "ಕಟ್ಟಡ ನಿರ್ಮಾಣ ಸ್ಥಳದಿಂದ ಕಾರ್ಮಿಕ ಬಿದ್ದಿದ್ದಾರೆ, ಗಂಭೀರ ಗಾಯ", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "ಬಸ್ ಮತ್ತು ಲಾರಿ ಮುಖಾಮುಖಿ ಡಿಕ್ಕಿ, ಹಲವರಿಗೆ ತೀವ್ರ ಗಾಯ", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "Apaghatha aagide, gadi palti aagide, bega banni", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "ಹಿಟ್ ಅಂಡ್ ರನ್ ಅಪಘಾತ, ಪಾದಚಾರಿಗೆ ಗಂಭೀರ ಗಾಯ", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "ರಸ್ತೆಯಲ್ಲಿ ರಕ್ತ ಸುರಿಯುತ್ತಿದೆ, ಆಂಬ್ಯುಲೆನ್ಸ್ ಕಳಿಸಿ", "incident_type": "ACCIDENT", "severity": 5},
+    {"text": "ಫ್ಲೈಓವರ್ ಮೇಲೆ ಸರಣಿ ಅಪಘಾತ ಸಂಭವಿಸಿದೆ", "incident_type": "ACCIDENT", "severity": 4},
+    {"text": "ಆಟೋ ಪಲ್ಟಿ ಆಗಿದೆ, ಪ್ರಯಾಣಿಕರಿಗೆ ಪೆಟ್ಟಾಗಿದೆ", "incident_type": "ACCIDENT", "severity": 4},
+
+    # ─── OTHER & SPAM (Severity 1-3) ───
+    {"text": "Water pipe burst, road flooded with water", "incident_type": "OTHER", "severity": 2},
+    {"text": "Big tree fell down on electrical wires, road blocked", "incident_type": "OTHER", "severity": 2},
+    {"text": "Stray dog pack being aggressive towards children in playground", "incident_type": "OTHER", "severity": 3},
+    {"text": "Lost child wandering alone in crowded market", "incident_type": "OTHER", "severity": 4},
+    {"text": "Manhole open without warning signs on pedestrian path", "incident_type": "OTHER", "severity": 2},
+    {"text": "Pani ki pipe phat gayi, sadak beh rahi hai", "incident_type": "OTHER", "severity": 2},
+    {"text": "Ped gir gaya road par, traffic jam hai", "incident_type": "OTHER", "severity": 2},
+    {"text": "ರಸ್ತೆಯ ಮೇಲೆ ಮರ ಬಿದ್ದಿದೆ, ವಾಹನ ಸಂಚಾರ ಸ್ಥಗಿತ", "incident_type": "OTHER", "severity": 2},
+    {"text": "ನೀರಿನ ಪೈಪ್ ಹೊಡೆದು ಇಡೀ ರಸ್ತೆ ಮುಳುಗಿದೆ", "incident_type": "OTHER", "severity": 2},
+    {"text": "testing 1 2 3 haha lol", "incident_type": "OTHER", "severity": 1},
+    {"text": "just checking if app works", "incident_type": "OTHER", "severity": 1},
+    {"text": "asdf qwerty test test", "incident_type": "OTHER", "severity": 1},
+    {"text": "hello test emergency", "incident_type": "OTHER", "severity": 1},
+]
+
+with open("training_data.json", "w", encoding="utf-8") as f:
+    json.dump(RAW_DATA, f, ensure_ascii=False, indent=2)
+
+print(f"Generated {len(RAW_DATA)} labeled emergency incidents in training_data.json")
